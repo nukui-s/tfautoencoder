@@ -6,31 +6,35 @@ class TFAutoEncoder(object):
     """class for Auto Encoder on Tensorflow"""
 
     def __init__(self, target_dim, hidden_units=[], learning_rate=0.1,
-                        tf_master="", num_cores=4):
+                        tf_master="", num_cores=4, steps=50, logdir=None):
         self.hidden_units = hidden_units
         self.hidden_num = len(hidden_units)
         self.target_dim = target_dim
         self.learning_rate = learning_rate
+        self.steps = steps
         self.tf_master = tf_master
         self.num_cores = num_cores
+        self.logdir = logdir
 
-    def fit(self, data, logdir="testlog"):
+
+    def fit(self, data):
         data = np.array(data)
         shape = data.shape
         if len(shape) != 2:
             raise TypeError("The shape of data is invalid")
         self.input_dim = shape[1]
         self._setup_graph()
-        writer = tf.train.SummaryWriter(logdir)
         sess = self._session
+        if self.logdir:
+            writer = tf.train.SummaryWriter(self.logdir, sess.graph_def)
         sess.run(self._initializer)
-        for _ in range(10):
+        for step in range(self.steps):
             feed_dict = {self._input: data,
                                 self._batch_size: float(shape[0])}
-            loss, merged, _ = sess.run([self._loss, self._merged, self._optimize],
+            loss, summ, _ = sess.run([self._loss, self._summ, self._optimize],
                                                     feed_dict=feed_dict)
-            print(loss)
-            writer.add_summary(merged)
+            if self.logdir:
+                writer.add_summary(summ, step)
 
     def encode(self, data):
         sess = self._session
@@ -101,8 +105,9 @@ class TFAutoEncoder(object):
             self._loss = loss = tf.nn.l2_loss(X - X_) / batch_size
             self._optimize = tf.train.GradientDescentOptimizer(lr).minimize(loss)
 
-            loss_summ = tf.scalar_summary("l2_loss", loss)
-            self._merged = tf.merge_all_summaries()
+            #variables summary
+            tf.scalar_summary("l2_loss", self._loss)
+            self._summ = tf.merge_all_summaries()
 
             #create session
             self._session = tf.Session(self.tf_master,
@@ -123,8 +128,9 @@ class TFAutoEncoder(object):
         return tf.Variable(init)
 
 if __name__ == '__main__':
-    ae = TFAutoEncoder(target_dim=3, hidden_units=[5], num_cores=8)
-    X = np.random.rand(500000).reshape(50000, 10)
+    ae = TFAutoEncoder(target_dim=3, hidden_units=[5], num_cores=8,
+                                    logdir="testlog")
+    X = np.arange(50000).reshape(5000, 10)
     ae.fit(X)
     Y = ae.reconstructe(X)
     print(Y)

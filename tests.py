@@ -9,16 +9,15 @@ from autoencoder import TFAutoEncoder
 class Test(tf.test.TestCase):
     def testAutoEncoder(self):
         with self.test_session() as sess:
-            encoder = TFAutoEncoder(target_dim=3, hidden_units=[5])
-            X = np.arange(50).reshape(5,10)
+            encoder = TFAutoEncoder(target_dim=3, hidden_units=[5],
+                                                     num_cores=8, steps=50)
+            X = np.random.rand(50000).reshape(5000,10)
             encoder.fit(X)
             Y = encoder.encode(X)
+            X_ = encoder.reconstructe(X)
             print(X)
             print(Y)
-            #tf.initialize_all_variables().run()
-            #feature = encoder.reduced_feature
-            #print(sess.run(feature, feed_dict={encoder.X: X}))
-
+            print(X_)
 
 if __name__ == '__main__':
     tf.test.main()
