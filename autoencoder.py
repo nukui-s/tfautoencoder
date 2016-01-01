@@ -6,7 +6,8 @@ class TFAutoEncoder(object):
     """class for Auto Encoder on Tensorflow"""
 
     def __init__(self, target_dim, hidden_units=[], learning_rate=0.1,
-                        tf_master="", num_cores=4, steps=50, logdir=None):
+                        tf_master="", num_cores=4, steps=50, w_stddev=0.1,
+                        logdir=None):
         self.hidden_units = hidden_units
         self.hidden_num = len(hidden_units)
         self.target_dim = target_dim
@@ -14,6 +15,7 @@ class TFAutoEncoder(object):
         self.steps = steps
         self.tf_master = tf_master
         self.num_cores = num_cores
+        self.w_stddev = w_stddev
         self.logdir = logdir
 
 
@@ -68,7 +70,7 @@ class TFAutoEncoder(object):
             #weight and bias variables for encode part
             for n in range(layer_num-1):
                 w_shape = layer_units[n: n+2]
-                W = self._weight_variable(w_shape)
+                W = self._weight_variable(w_shape, self.w_stddev)
                 W_list.append(W)
                 b_shape = [layer_units[n+1]]
                 b = self._bias_variable(b_shape)
@@ -118,7 +120,7 @@ class TFAutoEncoder(object):
             self._initializer = tf.initialize_all_variables()
 
 
-    def _weight_variable(self, shape, stddev=0.1):
+    def _weight_variable(self, shape, stddev):
         init = tf.random_normal(shape, stddev)
         w = tf.Variable(init)
         return w
