@@ -55,8 +55,6 @@ class TFAutoEncoder(object):
 
         for step in range(self.steps):
             feed_dict = self._get_feed_dict(data, self.noising)
-            if step==0:
-                print(feed_dict[self._noise])
             loss, summ, _ = sess.run([self._loss, self._summ, self._optimize],
                                                     feed_dict=feed_dict)
             if self.logdir:
