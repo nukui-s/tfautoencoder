@@ -1,21 +1,31 @@
 import numpy as np
 import tensorflow as tf
 
+ACTIVATE_FUNC = {"relu": tf.nn.relu,
+                                "sigmoid": tf.nn.sigmoid,
+                                "softplus": tf.nn.softplus}
 
 class TFAutoEncoder(object):
     """class for Auto Encoder on Tensorflow"""
 
-    def __init__(self, target_dim, hidden_units=[], learning_rate=0.1,
-                        tf_master="", num_cores=4, steps=50, w_stddev=0.1,
-                        logdir=None):
-        self.hidden_units = hidden_units
-        self.hidden_num = len(hidden_units)
-        self.target_dim = target_dim
+    def __init__(self, hidden_dim, learning_rate=0.1, noising=True,
+                        noise_stddev=0.01, tf_master="", num_cores=4,
+                        steps=50, w_stddev=0.1, activate_func="relu",
+                        lambda_w=0, batch_size=100, logdir=None):
+        if not activate_func in ACTIVATE_FUNC:
+            raise ValueError("activate_func must be chosed of the following:"
+                                    "`relu`,`sigmoid`, `softplus`")
+        self.activate_func = activate_func
+        self.hidden_dim = hidden_dim
         self.learning_rate = learning_rate
+        self.noising = noising
         self.steps = steps
         self.tf_master = tf_master
         self.num_cores = num_cores
         self.w_stddev = w_stddev
+        self.noise_stddev = noise_stddev
+        self.lambda_w = lambda_w
+        self.batch_size = batch_size
         self.logdir = logdir
 
 
@@ -25,14 +35,18 @@ class TFAutoEncoder(object):
         if len(shape) != 2:
             raise TypeError("The shape of data is invalid")
         self.input_dim = shape[1]
+
+        #setup computational graph
         self._setup_graph()
         sess = self._session
+
+        #setup summary writer for TensorBoard
         if self.logdir:
             writer = tf.train.SummaryWriter(self.logdir, sess.graph_def)
+
         sess.run(self._initializer)
         for step in range(self.steps):
-            feed_dict = {self._input: data,
-                                self._batch_size: float(shape[0])}
+            feed_dict = self._get_feed_dict(data, self.noising)
             loss, summ, _ = sess.run([self._loss, self._summ, self._optimize],
                                                     feed_dict=feed_dict)
             if self.logdir:
@@ -40,75 +54,66 @@ class TFAutoEncoder(object):
 
     def encode(self, data):
         sess = self._session
+        feed_dict = self._get_feed_dict(data, noising=False)
         encoded = sess.run(self._encoded,
-                                    feed_dict={self._input: data})
+                                    feed_dict=feed_dict)
         return encoded
 
-    def reconstructe(self, data):
+    def reconstruct(self, data):
         sess = self._session
+        feed_dict = self._get_feed_dict(data, noising=False)
         reconstructed = sess.run(self._reconstructed,
-                                            feed_dict={self._input: data})
+                                            feed_dict=feed_dict)
         return reconstructed
+
+    def _get_feed_dict(self, data, noising):
+        shape = data.shape
+        feed_dict = {self._input: data,
+                        self._batch_size: float(shape[0])}
+        if noising:
+            noise = self._generate_noise(shape, self.noise_stddev)
+            feed_dict[self._noise] = noise
+        else:
+            zeros = np.zeros(shape=shape)
+            feed_dict[self._noise] = zeros
+        return feed_dict
 
     def _setup_graph(self):
         self._graph = tf.Graph()
         with self._graph.as_default():
-            input_dim, target_dim = self.input_dim, self.target_dim
-            hidden_units = self.hidden_units
+            input_dim, hidden_dim = self.input_dim, self.hidden_dim
             lr = self.learning_rate
+            activate_func = ACTIVATE_FUNC[self.activate_func]
 
             self._input = X = tf.placeholder(name="X", dtype="float",
-                                                    shape=[None, self.input_dim])
-            self._batch_size = batch_size = tf.placeholder(name="batchsize", dtype="float")
+                                                        shape=[None, input_dim])
+            self._batch_size = batch_size = tf.placeholder(name="batchsize",
+                                                                                    dtype="float")
+            self._noise = noise = tf.placeholder(name="noise", dtype="float",
+                                                                shape=[None, input_dim])
+            clean_X = X
+            X = X + noise
 
-            layer_units = [input_dim] + hidden_units + [target_dim]
-            layer_num = len(layer_units)
+            self._W = W = self._weight_variable(shape=[input_dim, hidden_dim],
+                                                                    stddev=self.w_stddev)
 
-            self._W_list = W_list = []
-            self._b_list = b_list = []
+            self._b = b = self._bias_variable([hidden_dim], self.w_stddev)
+            self._c = c = self._bias_variable([input_dim], self.w_stddev)
 
-            #weight and bias variables for encode part
-            for n in range(layer_num-1):
-                w_shape = layer_units[n: n+2]
-                W = self._weight_variable(w_shape, self.w_stddev)
-                W_list.append(W)
-                b_shape = [layer_units[n+1]]
-                b = self._bias_variable(b_shape)
-                b_list.append(b)
-            #bias variables for decode part
-            for n in reversed(range(layer_num-1)):
-                b_shape = [layer_units[n]]
-                b = self._bias_variable(b_shape)
-                b_list.append(b)
+            encoded = activate_func(tf.matmul(X, W) + b)
+            self._encoded = encoded
 
-            #difinition of encode part
-            outputs = [X]
-            for n in range(layer_num-1):
-                n_input = outputs[n]
-                W_n = W_list[n]
-                b_n = b_list[n]
-                n_output = tf.nn.relu(tf.matmul(n_input, W_n) + b_n)
-                outputs.append(n_output)
+            Wt = tf.transpose(W)
+            reconstructed = activate_func(tf.matmul(encoded, Wt) + c)
+            self._reconstructed = reconstructed
 
-            #encoded input
-            self._encoded = outputs[-1]
-
-            #difinition of decode parts
-            for n in range(layer_num - 1, 2*layer_num - 2):
-                n_input = outputs[n]
-                W_n = tf.transpose(W_list[2*layer_num - 3 - n])
-                b_n = b_list[n]
-                n_output = tf.nn.relu(tf.matmul(n_input, W_n) + b_n)
-                outputs.append(n_output)
-
-            #reconstructed input
-            self._reconstructed = X_ = outputs[-1]
-
-            self._loss = loss = tf.nn.l2_loss(X - X_) / batch_size
+            regularizer = self.lambda_w * tf.nn.l2_loss(W)
+            error = tf.nn.l2_loss(clean_X - reconstructed)
+            self._loss = loss = (error + regularizer) / batch_size
             self._optimize = tf.train.GradientDescentOptimizer(lr).minimize(loss)
 
             #variables summary
-            tf.scalar_summary("l2_loss", self._loss)
+            tf.scalar_summary("l2_loss", loss)
             self._summ = tf.merge_all_summaries()
 
             #create session
@@ -120,19 +125,28 @@ class TFAutoEncoder(object):
             self._initializer = tf.initialize_all_variables()
 
 
-    def _weight_variable(self, shape, stddev):
-        init = tf.random_normal(shape, stddev)
+    @classmethod
+    def _weight_variable(cls, shape, stddev):
+        init = tf.truncated_normal(shape, stddev)
         w = tf.Variable(init)
         return w
 
-    def _bias_variable(self, shape):
-        init = tf.ones(shape=shape)
-        return tf.Variable(init)
+    @classmethod
+    def _bias_variable(cls, shape, stddev):
+        init = tf.truncated_normal(shape, stddev)
+        b = tf.Variable(init)
+        return b
+
+    @classmethod
+    def _generate_noise(cls, shape, stddev):
+        noise = np.random.normal(size=shape, scale=stddev)
+        return noise
 
 if __name__ == '__main__':
-    ae = TFAutoEncoder(target_dim=3, hidden_units=[5], num_cores=8,
-                                    logdir="testlog")
+    ae = TFAutoEncoder(hidden_dim=3,  num_cores=8,
+                                    logdir="testlog", steps=0)
     X = np.arange(50000).reshape(5000, 10)
     ae.fit(X)
-    Y = ae.reconstructe(X)
+    Y = ae.reconstruct(X)
+    print(X)
     print(Y)
