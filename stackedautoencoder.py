@@ -1,7 +1,7 @@
 """Stacked Autoencoder on Tensorflow"""
 
 # Authors: Nukui Shun <nukui.s@ai.cs.titech.ac.jp>
-#Licencse: BSD 3 clause
+#License : GNU General Public License v2.0
 
 from __future__ import division
 from __future__ import print_function
