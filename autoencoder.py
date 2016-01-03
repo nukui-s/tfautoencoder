@@ -14,7 +14,7 @@ class TFAutoEncoder(object):
 
     def __init__(self, hidden_dim, learning_rate=0.01, noising=True,
                         noise_stddev=10e-3, w_stddev=0.1, steps=50,
-                        activate_func="softplus", optimizer="adam",
+                        activate_func="relu", optimizer="adam",
                         lambda_w=1, continue_training=False,
                         logdir=None, num_cores=4):
         if not activate_func in ACTIVATE_FUNC:
