@@ -1,6 +1,6 @@
 """Autoencoder on Tensorflow"""
 
-# Authors: Nukui Shun <nukui.s@ai.cs.titech.ac.jp>
+#Authors: Nukui Shun <nukui.s@ai.cs.titech.ac.jp>
 #License : GNU General Public License v2.0
 
 from __future__ import division
@@ -13,12 +13,12 @@ import numpy as np
 import tensorflow as tf
 
 ACTIVATE_FUNC = {"relu": tf.nn.relu,
-                                "sigmoid": tf.nn.sigmoid,
-                                "softplus": tf.nn.softplus}
+                "sigmoid": tf.nn.sigmoid,
+                "softplus": tf.nn.softplus}
 
 OPTIMIZER = {"sgd": tf.train.GradientDescentOptimizer,
-                        "adagrad": tf.train.AdagradOptimizer,
-                        "adam": tf.train.AdamOptimizer}
+            "adagrad": tf.train.AdagradOptimizer,
+            "adam": tf.train.AdamOptimizer}
 
 class TFAutoEncoder(object):
     """class for Auto Encoder on Tensorflow
@@ -52,15 +52,15 @@ class TFAutoEncoder(object):
     """
 
     def __init__(self, hidden_dim, learning_rate=0.01, noising=False,
-                        noise_stddev=10e-2, activate_func="relu", optimizer="adam",
-                        steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
-                        logdir=None, continue_training=False):
+                noise_stddev=10e-2, activate_func="relu", optimizer="adam",
+                steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
+                logdir=None, continue_training=False):
         if not activate_func in ACTIVATE_FUNC:
             raise ValueError("activate_func must be chosen of the following:"
-                                    "`relu``sigmoid` `softplus`")
+                            "`relu``sigmoid` `softplus`")
         if not optimizer in OPTIMIZER:
             raise ValueError("optimizer must be chosen of the following:"
-                                    "`sgd` `adagrad` `adam`")
+                            "`sgd` `adagrad` `adam`")
         self.activate_func = activate_func
         self.optimizer = optimizer
         self.hidden_dim = hidden_dim
@@ -106,7 +106,7 @@ class TFAutoEncoder(object):
         sess = self._session
         feed_dict = self._get_feed_dict(data, noising=False)
         encoded = sess.run(self._encoded,
-                                    feed_dict=feed_dict)
+                          feed_dict=feed_dict)
         return encoded
 
     def reconstruct(self, data):
@@ -114,13 +114,13 @@ class TFAutoEncoder(object):
         sess = self._session
         feed_dict = self._get_feed_dict(data, noising=False)
         reconstructed = sess.run(self._reconstructed,
-                                            feed_dict=feed_dict)
+                                feed_dict=feed_dict)
         return reconstructed
 
     def _get_feed_dict(self, data, noising):
         shape = data.shape
         feed_dict = {self._input: data,
-                        self._batch_size: float(shape[0])}
+                    self._batch_size: float(shape[0])}
         if noising:
             noise = self._generate_noise(shape, self.noise_stddev)
             feed_dict[self._noise] = noise
@@ -139,16 +139,16 @@ class TFAutoEncoder(object):
             optimizer = OPTIMIZER[self.optimizer]
 
             self._input = X = tf.placeholder(name="X", dtype="float",
-                                                        shape=[None, input_dim])
+                                            shape=[None, input_dim])
             self._batch_size = batch_size = tf.placeholder(name="batchsize",
-                                                                                    dtype="float")
+                                                            dtype="float")
             self._noise = noise = tf.placeholder(name="noise", dtype="float",
-                                                                shape=[None, input_dim])
+                                                shape=[None, input_dim])
             clean_X = X
             X = X + noise
 
             self._W = W = self._weight_variable(shape=[input_dim, hidden_dim],
-                                                                    stddev=self.w_stddev)
+                                                stddev=self.w_stddev)
 
             self._b = b = self._bias_variable([hidden_dim])
             self._c = c = self._bias_variable([input_dim])
@@ -161,8 +161,8 @@ class TFAutoEncoder(object):
             self._reconstructed = reconstructed
 
             regularizer = self.lambda_w * (tf.nn.l2_loss(W) + \
-                                                        tf.nn.l2_loss(b) + \
-                                                        tf.nn.l2_loss(c))
+                                            tf.nn.l2_loss(b) + \
+                                            tf.nn.l2_loss(c))
             error = tf.nn.l2_loss(clean_X - reconstructed)
             self._loss = loss = error + regularizer
             self._optimize = optimizer(lr).minimize(loss)
@@ -173,8 +173,8 @@ class TFAutoEncoder(object):
 
             #create session
             self._session = tf.Session(config=tf.ConfigProto(
-                                                    inter_op_parallelism_threads=self.num_cores,
-                                                    intra_op_parallelism_threads=self.num_cores))
+                                    inter_op_parallelism_threads=self.num_cores,
+                                    intra_op_parallelism_threads=self.num_cores))
             #create initializer
             self._initializer = tf.initialize_all_variables()
             self._session.run(self._initializer)

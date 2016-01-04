@@ -45,9 +45,9 @@ class TFStackedAutoEncoder(object):
     """
 
     def __init__(self, layer_units, learning_rate=0.01, noising=False,
-                        noise_stddev=10e-2, activate_func="relu", optimizer="adam",
-                        steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
-                        logdir=None):
+                noise_stddev=10e-2, activate_func="relu", optimizer="adam",
+                steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
+                logdir=None):
         self.layer_units = layer_units
         self.layer_num = len(layer_units)
         self.learning_rate = learning_rate
@@ -87,14 +87,15 @@ class TFStackedAutoEncoder(object):
         """Encode data by learned stacked autoencoder """
         sess = self.session
         encoded = sess.run(self._outputs[layer],
-                                    feed_dict={self._input: data})
+                        feed_dict={self._input: data})
         return encoded
 
     def _setup_encode(self):
         """Setup computation graph for encode """
         self._graph = tf.Graph()
         with self._graph.as_default():
-            self._input = X = tf.placeholder("float", shape=[None, self.layer_units[0]])
+            self._input = X = tf.placeholder(dtype="float",
+                                            shape=[None, self.layer_units[0]])
 
             #setup data nodes for weights and biases
             weights = []
@@ -118,8 +119,8 @@ class TFStackedAutoEncoder(object):
 
             #create session
             self.session = tf.Session(config=tf.ConfigProto(
-                                                    inter_op_parallelism_threads=self.num_cores,
-                                                    intra_op_parallelism_threads=self.num_cores))
+                                    inter_op_parallelism_threads=self.num_cores,
+                                    intra_op_parallelism_threads=self.num_cores))
             init_op = tf.initialize_all_variables()
             self.session.run(init_op)
 
@@ -133,17 +134,17 @@ class TFStackedAutoEncoder(object):
         else:
             logdir = self.logdir
         ae = TFAutoEncoder(hidden_dim=hidden_dim,
-                                        learning_rate=self.learning_rate,
-                                        noising=self.noising,
-                                        noise_stddev=self.noise_stddev,
-                                        w_stddev=self.w_stddev,
-                                        lambda_w=self.lambda_w,
-                                        steps=self.steps,
-                                        activate_func=self.activate_func,
-                                        optimizer=self.optimizer,
-                                        continue_training=False,
-                                        logdir=logdir,
-                                        num_cores=self.num_cores)
+                        learning_rate=self.learning_rate,
+                        noising=self.noising,
+                        noise_stddev=self.noise_stddev,
+                        w_stddev=self.w_stddev,
+                        lambda_w=self.lambda_w,
+                        steps=self.steps,
+                        activate_func=self.activate_func,
+                        optimizer=self.optimizer,
+                        continue_training=False,
+                        logdir=logdir,
+                        num_cores=self.num_cores)
         ae.fit(data)
         output = ae.encode(data)
         weight = ae.weight
