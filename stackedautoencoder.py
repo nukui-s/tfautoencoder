@@ -1,6 +1,6 @@
 """Stacked Autoencoder on Tensorflow"""
 
-# Authors: Nukui Shun <nukui.s@ai.cs.titech.ac.jp>
+#Authors: Nukui Shun <nukui.s@ai.cs.titech.ac.jp>
 #License : GNU General Public License v2.0
 
 from __future__ import division
@@ -85,7 +85,7 @@ class TFStackedAutoEncoder(object):
 
     def encode(self, data, layer=-1):
         """Encode data by learned stacked autoencoder """
-        sess = self._session
+        sess = self.session
         encoded = sess.run(self._outputs[layer],
                                     feed_dict={self._input: data})
         return encoded
@@ -99,10 +99,12 @@ class TFStackedAutoEncoder(object):
             #setup data nodes for weights and biases
             weights = []
             biases = []
-            for w in self.weights:
-                weights.append(tf.constant(w))
-            for b in self.biases:
-                biases.append(b)
+            for n, w in enumerate(self.weights):
+                name = "weight_" + str(n)
+                weights.append(tf.Variable(w, name=name))
+            for n, b in enumerate(self.biases):
+                name = "bias_" + str(n)
+                biases.append(tf.Variable(b, name=name))
 
             #define encoder: outputs[-1] is final result of encoding
             self._outputs = outputs = [X]
@@ -115,11 +117,11 @@ class TFStackedAutoEncoder(object):
                 outputs.append(output_n)
 
             #create session
-            self._session = tf.Session(config=tf.ConfigProto(
+            self.session = tf.Session(config=tf.ConfigProto(
                                                     inter_op_parallelism_threads=self.num_cores,
                                                     intra_op_parallelism_threads=self.num_cores))
-
-
+            init_op = tf.initialize_all_variables()
+            self.session.run(init_op)
 
     def _partial_fit(self, data, hidden_dim, layer_no):
         """Optimize single autoencoder"""
