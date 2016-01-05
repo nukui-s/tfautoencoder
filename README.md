@@ -23,6 +23,7 @@ $sudo python setup.py install
 ```python
 import numpy as np
 from tfautoencoder import TFAutoEncoder
+from tfautoencoder import TFStackedAutoencoder
 
 #prepare data as numpy array or pandas DataFrame
 data = np.random.rand(1000,50)
