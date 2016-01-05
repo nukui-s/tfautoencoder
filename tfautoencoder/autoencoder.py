@@ -37,7 +37,7 @@ class TFAutoEncoder(object):
 
         optimizer : Selected in 'sgd' 'adagrad' 'adam'(default)
 
-        steps : The number of steps in optimization
+        num_epoch : The number of epochs in optimization
 
         w_stddev : Used in initializing weight variables
 
@@ -53,20 +53,20 @@ class TFAutoEncoder(object):
 
     def __init__(self, hidden_dim, learning_rate=0.01, noising=False,
                 noise_stddev=10e-2, activate_func="relu", optimizer="adam",
-                steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
+                num_epoch=100, w_stddev=0.1, lambda_w=0, num_cores=4,
                 logdir=None, continue_training=False):
         if not activate_func in ACTIVATE_FUNC:
             raise ValueError("activate_func must be chosen of the following:"
-                            "`relu``sigmoid` `softplus`")
+                            "'relu','sigmoid','softplus'")
         if not optimizer in OPTIMIZER:
             raise ValueError("optimizer must be chosen of the following:"
-                            "`sgd` `adagrad` `adam`")
+                            "'sgd','adagrad','adam'")
         self.activate_func = activate_func
         self.optimizer = optimizer
         self.hidden_dim = hidden_dim
         self.learning_rate = learning_rate
         self.noising = noising
-        self.steps = steps
+        self.num_epoch = num_epoch
         self.num_cores = num_cores
         self.w_stddev = w_stddev
         self.noise_stddev = noise_stddev
@@ -86,24 +86,24 @@ class TFAutoEncoder(object):
         #setup computational graph if not initialized
         if not (self.continue_training and self._initialized):
             self._setup_graph()
-        sess = self._session
+        sess = self.session
 
         #setup summary writer for TensorBoard
         if self.logdir:
             writer = tf.train.SummaryWriter(self.logdir, sess.graph_def)
 
-        for step in xrange(self.steps):
+        for step in xrange(self.num_epoch):
             feed_dict = self._get_feed_dict(data, self.noising)
-            loss, summ, _ = sess.run([self._loss, self._summ, self._optimize],
+            l2_loss, summ, _ = sess.run([self._l2_loss, self._summ, self._optimize],
                                                     feed_dict=feed_dict)
             if self.logdir:
                 writer.add_summary(summ, step)
-        self.fit_loss = loss
+        self.fit_loss = l2_loss
 
 
     def encode(self, data):
         """Encode data by learned autoencoder """
-        sess = self._session
+        sess = self.session
         feed_dict = self._get_feed_dict(data, noising=False)
         encoded = sess.run(self._encoded,
                           feed_dict=feed_dict)
@@ -111,7 +111,7 @@ class TFAutoEncoder(object):
 
     def reconstruct(self, data):
         """Encode and decode input data"""
-        sess = self._session
+        sess = self.session
         feed_dict = self._get_feed_dict(data, noising=False)
         reconstructed = sess.run(self._reconstructed,
                                 feed_dict=feed_dict)
@@ -149,8 +149,9 @@ class TFAutoEncoder(object):
 
             self._W = W = self._weight_variable(shape=[input_dim, hidden_dim],
                                                 stddev=self.w_stddev)
-
+            #bias in bottom layer
             self._b = b = self._bias_variable([hidden_dim])
+            #bias in upper layer
             self._c = c = self._bias_variable([input_dim])
 
             encoded = activate_func(tf.matmul(X, W) + b)
@@ -163,21 +164,23 @@ class TFAutoEncoder(object):
             regularizer = self.lambda_w * (tf.nn.l2_loss(W) + \
                                             tf.nn.l2_loss(b) + \
                                             tf.nn.l2_loss(c))
-            error = tf.nn.l2_loss(clean_X - reconstructed)
-            self._loss = loss = error + regularizer
+            l2_loss = tf.nn.l2_loss(clean_X - reconstructed) / batch_size
+            self._l2_loss = l2_loss
+            self._loss = loss = l2_loss + regularizer
             self._optimize = optimizer(lr).minimize(loss)
 
             #variables summary
-            tf.scalar_summary("l2_loss", loss)
+            tf.scalar_summary("l2_loss", l2_loss)
+            tf.scalar_summary("loss", loss)
             self._summ = tf.merge_all_summaries()
 
             #create session
-            self._session = tf.Session(config=tf.ConfigProto(
+            self.session = tf.Session(config=tf.ConfigProto(
                                     inter_op_parallelism_threads=self.num_cores,
                                     intra_op_parallelism_threads=self.num_cores))
             #create initializer
             self._initializer = tf.initialize_all_variables()
-            self._session.run(self._initializer)
+            self.session.run(self._initializer)
             self._initialized = True
 
     @classmethod
@@ -204,15 +207,20 @@ class TFAutoEncoder(object):
     @property
     def weight(self):
         """Return weight as numpy array"""
-        sess = self._session
-        weight = self._W
-        return sess.run(weight)
+        sess = self.session
+        W = sess.run(self._W)
+        return W
 
     @property
     def bias(self):
         """Return bias as numpy array"""
-        sess = self._session
-        b, c = self._b, self._c
-        b = sess.run(b)
-        c = sess.run(c)
-        return b, c
+        sess = self.session
+        b = sess.run(self._b)
+        return b
+
+    @property
+    def bias_upper(self):
+        """Return bias as numpy array"""
+        sess = self.session
+        c = sess.run(self._c)
+        return c

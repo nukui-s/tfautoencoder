@@ -13,8 +13,8 @@ from six.moves import xrange
 import numpy as np
 import tensorflow as tf
 
-from .autoencoder import TFAutoEncoder
-from .autoencoder import ACTIVATE_FUNC
+from tfautoencoder.autoencoder import TFAutoEncoder
+from tfautoencoder.autoencoder import ACTIVATE_FUNC
 
 class TFStackedAutoEncoder(object):
     """Class for Stacked Auto Encoder on Tensorflow
@@ -33,7 +33,7 @@ class TFStackedAutoEncoder(object):
 
         optimizer : Selected in 'sgd' 'adagrad' 'adam'(default)
 
-        steps : The number of steps in optimization
+        num_epoch : The number of epochs in optimization
 
         w_stddev : Used in initializing weight variables
 
@@ -46,12 +46,12 @@ class TFStackedAutoEncoder(object):
 
     def __init__(self, layer_units, learning_rate=0.01, noising=False,
                 noise_stddev=10e-2, activate_func="relu", optimizer="adam",
-                steps=50, w_stddev=0.1, lambda_w=1.0, num_cores=4,
+                num_epoch=100, w_stddev=0.1, lambda_w=0, num_cores=4,
                 logdir=None):
         self.layer_units = layer_units
         self.layer_num = len(layer_units)
         self.learning_rate = learning_rate
-        self.steps = steps
+        self.num_epoch = num_epoch
         self.num_cores = num_cores
         self.w_stddev = w_stddev
         self.lambda_w = lambda_w
@@ -68,20 +68,18 @@ class TFStackedAutoEncoder(object):
         if len(shape) != 2:
             raise TypeError("The shape of data is invalid")
         if shape[1] != self.layer_units[0]:
-            raise ValueError("Input dimension and 1st layer units does not match")
+            raise ValueError("Input dimension must match to 1st layer units")
         outputs = [data]
-        weights = []
-        biases = []
+        weight = []
+        bias = []
         for n in xrange(1, self.layer_num):
             input_n = outputs[n-1]
             hidden_dim = self.layer_units[n]
             output_n, W_n, b_n = self._partial_fit(input_n, hidden_dim, n)
             outputs.append(output_n)
-            weights.append(W_n)
-            biases.append(b_n)
-        self.weights = weights
-        self.biases = biases
-        self._setup_encode()
+            weight.append(W_n)
+            bias.append(b_n)
+        self._setup_encode(weight, bias)
 
     def encode(self, data, layer=-1):
         """Encode data by learned stacked autoencoder """
@@ -90,30 +88,34 @@ class TFStackedAutoEncoder(object):
                         feed_dict={self._input: data})
         return encoded
 
-    def _setup_encode(self):
-        """Setup computation graph for encode """
+    def _setup_encode(self, weight_, bias_):
+        """Setup computation graph for encode
+           Initialize weights and biases to given values
+        """
         self._graph = tf.Graph()
         with self._graph.as_default():
             self._input = X = tf.placeholder(dtype="float",
                                             shape=[None, self.layer_units[0]])
 
             #setup data nodes for weights and biases
-            weights = []
-            biases = []
-            for n, w in enumerate(self.weights):
-                name = "weight_" + str(n)
-                weights.append(tf.Variable(w, name=name))
-            for n, b in enumerate(self.biases):
-                name = "bias_" + str(n)
-                biases.append(tf.Variable(b, name=name))
+            weight = []
+            bias = []
+            for n, w in enumerate(weight_):
+                with tf.variable_scope("layer"+str(n)):
+                    weight.append(tf.Variable(w, name="weight"))
+            for n, b in enumerate(bias_):
+                with tf.variable_scope("layer"+str(n)):
+                    bias.append(tf.Variable(b, name="bias"))
+            self._weight = weight
+            self._bias = bias
 
             #define encoder: outputs[-1] is final result of encoding
             self._outputs = outputs = [X]
             activate_func = ACTIVATE_FUNC[self.activate_func]
             for n in xrange(self.layer_num-1):
                 x = outputs[n]
-                w = weights[n]
-                b = biases[n]
+                w = weight[n]
+                b = bias[n]
                 output_n = activate_func(tf.matmul(x, w) + b)
                 outputs.append(output_n)
 
@@ -139,7 +141,7 @@ class TFStackedAutoEncoder(object):
                         noise_stddev=self.noise_stddev,
                         w_stddev=self.w_stddev,
                         lambda_w=self.lambda_w,
-                        steps=self.steps,
+                        num_epoch=self.num_epoch,
                         activate_func=self.activate_func,
                         optimizer=self.optimizer,
                         continue_training=False,
@@ -148,5 +150,21 @@ class TFStackedAutoEncoder(object):
         ae.fit(data)
         output = ae.encode(data)
         weight = ae.weight
-        bias = ae.bias[0]
+        bias = ae.bias
         return output, weight, bias
+
+    @property
+    def weight(self):
+        sess = self.session
+        wlist = []
+        for w in self._weight:
+            wlist.append(sess.run(w))
+        return np.array(wlist)
+
+    @property
+    def bias(self):
+        sess = self.session
+        blist = []
+        for b in self._bias:
+            blist.append(sess.run(b))
+        return np.array(blist)

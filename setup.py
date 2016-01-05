@@ -3,6 +3,6 @@
 from distutils.core import setup
 
 setup(name="tfautoencoder",
-      version="1.0.0",
+      version="1.0.1",
       py_modules=["tfautoencoder.autoencoder",
                   "tfautoencoder.stackedautoencoder"])
