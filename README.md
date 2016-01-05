@@ -15,6 +15,7 @@ This package provides:
 Clone git repository and run setup.py as the following commands.
 ```
 $git clone https://github.com/nukui-s/tfautoencoder.git
+$cd tfautoencoder
 $sudo python setup.py install
 ```
 
