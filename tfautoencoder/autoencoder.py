@@ -161,9 +161,7 @@ class TFAutoEncoder(object):
             reconstructed = activate_func(tf.matmul(encoded, Wt) + c)
             self._reconstructed = reconstructed
 
-            regularizer = self.lambda_w * (tf.nn.l2_loss(W) + \
-                                            tf.nn.l2_loss(b) + \
-                                            tf.nn.l2_loss(c))
+            regularizer = self.lambda_w * tf.nn.l2_loss(W)
             l2_loss = tf.nn.l2_loss(clean_X - reconstructed) / batch_size
             self._l2_loss = l2_loss
             self._loss = loss = l2_loss + regularizer
