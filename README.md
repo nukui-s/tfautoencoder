@@ -41,6 +41,6 @@ data2 = ae.reconstruct(data)
 dae = TFAutoEncoder(hidden_dim=10, noising=True)
 
 #Stacked AutoEncoder with 100, 50, 30 layer units
-sae = TFAutoEncoder(layer_units=[100, 50, 30])
+sae = TFStackedAutoEncoder(layer_units=[100, 50, 30])
 
 ```
